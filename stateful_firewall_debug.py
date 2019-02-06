@@ -1,83 +1,38 @@
 import os
 import sys
-from pox.lib.revent import *
-from pox.lib.util import dpidToStr
-from pox.lib.addresses import EthAddr
-from collections import namedtuple
 from pox.core import core
 from netaddr import IPNetwork, IPAddress
 import pox.openflow.libopenflow_01 as of
 import pox.lib.packet as pkt
-from pox.lib.addresses import IPAddr 
-#
-import csv
+from pox.lib.addresses import IPAddr
 
 log = core.getLogger()
 	
 #print ("[%s][%d][%s]" % (sys._getframe().f_code.co_filename,sys._getframe().f_lineno,sys._getframe().f_code.co_name))
 
-#
-class Firewall(EventMixin):
-
-	
-
-#
-   def __init__(self):
-    self.listenTo(core.openflow)
-    log.debug("Enabling Firewall Module")
-    self.deny = []
-    ifile = open(policyFile,"rb")
-       
-    reader = csv.DictReader(f)
-
-    dpidstr = dpid_to_str(event.connection.dpid)
-        
-        rownum = 0
-        l = []
-        for row in reader:
-			if rownum == 0:
-				continue
-			else:
-				for col in row:
-					l.append(col)
-				send_packet(l[0],l[1],l[2],dpidstr)
-			l = []
-			rownum+=1
-		log.debug("Firewall rules installed on %s"%dpidToStr)
-    def send_packet(self,sid,src,dest,dpidstr):
-	print "Src is ",str(src)
-	print "Src is ",str(EthAddr(src))
-	match = of.ofp_match()
-	msg = of.ofp_flow_mod()
-	msg.priority = 32768
-	msg.match.dl_src = EthAddr(src)
-	msg.match.dl_dst = EthAddr(dest)
-	self.connection.send(msg)
-
-    
-	print "mac filtré"
-
-#
-
-def __init__(self,connection): #fonction automatique
-
 class Firewall(object):
 
+	def __init__(self,connection):
 		print ("[%s][%d][%s]" % (sys._getframe().f_code.co_filename,sys._getframe().f_lineno,sys._getframe().f_code.co_name))
-		self.connection = connection
+  		"""
+		self.connection = variable locale que on a enregistre connection (var externe)sur la var self.connection 
+		"""
+		self.connection = connection 
 		self.flow_table = {}
 		self.inside_network = ["10.0.0.0/24"]
-		connection.addListeners(self)
-		self.config_ARP_flow() #appeler la fonction ARP
-		self.config_ICMP_flow()  #appeler la fonction ICMP
-		self.config_TCP_flow()  #appeler la fonction TCP
+		self.config_ARP_flow()
+		self.config_ICMP_flow()
+		self.config_TCP_flow()
+		"""
+		add.Listeners= comme Ecouteur pour Appeler la fonction _handle_PacketIn.
+		"""
+		connection.addListeners(self)		
 
-	def config_ARP_flow(self): #rEALISER LA FONCTION ARP
+	def config_ARP_flow(self):
 		self.config_protocol_flow(pkt.arp.REQUEST,pkt.ethernet.ARP_TYPE,None,None,None,None,False)
 		self.config_protocol_flow(pkt.arp.REPLY,pkt.ethernet.ARP_TYPE,None,None,None,None,False)
 		
 	def config_ICMP_flow(self):
-
 		self.config_protocol_flow(pkt.ipv4.ICMP_PROTOCOL,pkt.ethernet.IP_TYPE,None,None,None,None,False)
 
 	def config_TCP_flow(self):
@@ -156,8 +111,7 @@ class Firewall(object):
 			return
 		
 		print "Packet Type:", packet.type	
-		print packet_in
-		print "fethi"
+		#print packet_in
 
 		if packet.type == packet.IP_TYPE:
 			ip_packet = packet.payload
@@ -180,6 +134,9 @@ class Firewall(object):
 
 			self.resend_packet(packet)
 
+	"""
+	la fonction _handle_PacketIn va traiter les donnees de OpenFlow [ARP, ICMP, TCP,UDP, ...]
+	"""
 	def _handle_PacketIn(self,event):
 		print ("[%s][%d][%s]" % (sys._getframe().f_code.co_filename,sys._getframe().f_lineno,sys._getframe().f_code.co_name))
 		packet = event.parsed
@@ -209,7 +166,7 @@ class TCPConnTrack(object):
 		self.pkt = pkt
 		self.set_flags()
 
-	def set_flags(self):			
+	def set_flags(self):
 		"""
         	Extracts and Sets the TCP flags (FIN, SYN, RST, PSH, ACK)
         	"""
@@ -358,16 +315,40 @@ def parse_config(configuration):
 		rule = line.split()
 		print "rule:",rule
 		if (len(rule) > 0):
-			config.append(rule)	
+			config.append(rule)
+
+def parse_configmac(config_mac):
+	print ("[%s][%d][%s]" % (sys._getframe().f_code.co_filename,sys._getframe().f_lineno,sys._getframe().f_code.co_name))
+	"""
+ 	<srcip> [ / <netmask> ] <srcport> <dstip> [ / <netmask> ] <dstport>
+	"""
+	"""
+	lire le fichier firewall-config-mac
+	"""
 	
-def launch(configuration=""):
+	global configmac	
+	fin = open(config_mac)
+        """
+	split pour copier le 1er ligne des @ mac en deux partie macsrc mac dst 00:00:00:00:00:01(partie1)/00:00:00:00:00:02(par2)
+	"""
+	for line in fin:
+		macrule = line.split()
+		print "MAC rule:",macrule
+		if (len(macrule) > 0):
+			configmac.append(macrule)	
+	
+def launch(configuration="", config_mac=""):
 
 	print "Starting Pox Firewall.."
 	def start_firewall(event):
 		print ("[%s][%d][%s]" % (sys._getframe().f_code.co_filename,sys._getframe().f_lineno,sys._getframe().f_code.co_name))
 		Firewall(event.connection)
 
-	parse_config(configuration)  # APPELER LA FONC PARSE_CONFIG
+	parse_config(configuration)
+	parse_configmac(config_mac)
+	"""
+	core pour connecter au pare-feu via la fonction en haut (firewall (eveent.connection)) et appliquer la class en haut class firewall (object)
+	"""
 	core.openflow.addListenerByName("ConnectionUp",start_firewall)
 """
 Global variables
@@ -377,3 +358,8 @@ srcip   = 0
 srcport = 1
 dstip   = 2
 dstport = 3
+configmac  = []
+macsrc   = 0
+macdst = 1
+
+
